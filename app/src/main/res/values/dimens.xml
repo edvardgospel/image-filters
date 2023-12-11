@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Standard margin used in the layout -->
+    <dimen name="standard_margin">16dp</dimen>
+
+    <!-- Button corner radius -->
+    <dimen name="button_corner_radius">20dp</dimen>
+
+    <!-- Button height -->
+    <dimen name="button_height">48dp</dimen>
+
+    <!-- Text sizes -->
+    <dimen name="text_size_large">20sp</dimen>
+    <dimen name="text_size_small">16sp</dimen>
+</resources>
