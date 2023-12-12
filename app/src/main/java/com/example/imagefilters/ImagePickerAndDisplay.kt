@@ -30,6 +30,10 @@ import androidx.compose.ui.unit.dp
 import jp.co.cyberagent.android.gpuimage.GPUImage
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageGaussianBlurFilter
 import kotlinx.coroutines.Job
+import org.opencv.android.Utils
+import org.opencv.core.Mat
+import org.opencv.core.Size
+import org.opencv.imgproc.Imgproc
 import kotlin.math.max
 
 private var debounceJob: Job? = null
@@ -111,17 +115,26 @@ private fun scaleDownBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {
     )
 }
 
-private fun applyBlur(context: Context, imageUri: Uri, blurRadius: Float): Bitmap {
+private fun applyBlur(context: Context, imageUri: Uri, blurLevel: Float): Bitmap {
     val inputStream = context.contentResolver.openInputStream(imageUri)
-    val originalBitmap = BitmapFactory.decodeStream(inputStream)
-    val scaledBitmap = scaleDownBitmap(originalBitmap, 1024) // Example max dimension
-    val correctedBitmap = correctImageOrientation(context, imageUri, scaledBitmap)
+    val bitmap = BitmapFactory.decodeStream(inputStream)
+    val correctedBitmap = correctImageOrientation(context, imageUri, bitmap)
 
-    val gpuImage = GPUImage(context).apply {
-        setImage(correctedBitmap)
-        setFilter(GPUImageGaussianBlurFilter().apply {
-            setBlurSize(blurRadius)
-        })
-    }
-    return gpuImage.bitmapWithFilterApplied
+    // Convert bitmap to Mat
+    val srcMat = Mat()
+    Utils.bitmapToMat(correctedBitmap, srcMat)
+
+    // Apply Gaussian blur
+    val dstMat = Mat()
+    Imgproc.GaussianBlur(srcMat, dstMat, Size((blurLevel*2+1).toDouble(), (blurLevel*2+1).toDouble()), 0.0)
+
+    // Convert Mat back to Bitmap
+    val blurredBitmap = Bitmap.createBitmap(dstMat.cols(), dstMat.rows(), Bitmap.Config.ARGB_8888)
+    Utils.matToBitmap(dstMat, blurredBitmap)
+
+    // Clean up
+    srcMat.release()
+    dstMat.release()
+
+    return blurredBitmap
 }

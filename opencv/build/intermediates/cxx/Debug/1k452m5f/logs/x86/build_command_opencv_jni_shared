@@ -1,0 +1,4 @@
+/Users/edvard/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  /Users/edvard/work/image-filters/opencv/.cxx/Debug/1k452m5f/x86 \
+  opencv_jni_shared

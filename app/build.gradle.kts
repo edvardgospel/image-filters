@@ -37,6 +37,8 @@ android {
         jvmTarget = "1.8"
     }
     buildFeatures {
+        aidl = true
+        buildConfig = true
         compose = true
         viewBinding = true
     }
@@ -70,6 +72,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.0.0")
     implementation("com.google.android.material:material:1.12.0-alpha02")
     implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation(project(":opencv"))
     //implementation(project(":opencv"))
 
     testImplementation("junit:junit:4.13.2")

@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Image Filters"
 include(":app")
+include ':opencv'
