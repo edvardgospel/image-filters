@@ -69,7 +69,8 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:1.1.2")
     implementation("androidx.appcompat:appcompat:1.0.0")
     implementation("com.google.android.material:material:1.12.0-alpha02")
-
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    //implementation(project(":opencv"))
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
