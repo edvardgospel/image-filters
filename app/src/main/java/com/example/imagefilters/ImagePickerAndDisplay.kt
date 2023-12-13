@@ -15,12 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +32,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.opencv.android.Utils
-import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Size
@@ -44,8 +46,10 @@ fun ImagePickerAndDisplay() {
     val context = LocalContext.current
     val blurCache = remember { mutableMapOf<String, Bitmap?>() }
     var selectedBlurType by remember { mutableStateOf("gaussian") }
-    var showDropdown by remember { mutableStateOf(false) }
     val blurTypes = listOf("gaussian", "motion", "pixelate", "zoom", "box")
+    var processedImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    val coroutineScope = rememberCoroutineScope()
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -53,13 +57,20 @@ fun ImagePickerAndDisplay() {
         imageUri = uri
         blurredImageBitmap = null
         uri?.let {
-            val cacheKey = "$blurRadius-$selectedBlurType"
-            blurredImageBitmap =
-                blurCache[cacheKey] ?: applyBlur(context, uri, blurRadius, selectedBlurType).also {
+            processedImageBitmap = processImageBeforeBlurring(context, it)
+            processedImageBitmap?.let { bitmap ->
+                val cacheKey = "$blurRadius-$selectedBlurType"
+                blurredImageBitmap = blurCache[cacheKey] ?: applyBlur(
+                    bitmap,
+                    blurRadius,
+                    selectedBlurType
+                ).also {
                     blurCache[cacheKey] = it
                 }
+            }
         }
     }
+
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -72,7 +83,14 @@ fun ImagePickerAndDisplay() {
             blurTypes.forEach { blurType ->
                 Button(
                     onClick = { selectedBlurType = blurType },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedBlurType == blurType) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.tertiary
+                        }
+                    )
                 ) {
                     Text(blurType)
                 }
@@ -89,11 +107,10 @@ fun ImagePickerAndDisplay() {
             value = blurRadius,
             onValueChange = { newValue ->
                 blurRadius = newValue
-                imageUri?.let {
+                processedImageBitmap?.let { bitmap ->
                     val cacheKey = "$blurRadius-$selectedBlurType"
                     blurredImageBitmap = blurCache[cacheKey] ?: applyBlur(
-                        context,
-                        it,
+                        bitmap,
                         blurRadius,
                         selectedBlurType
                     ).also {
@@ -119,6 +136,17 @@ fun ImagePickerAndDisplay() {
     }
 }
 
+private fun processImageBeforeBlurring(context: Context, imageUri: Uri): Bitmap? {
+    val inputStream = context.contentResolver.openInputStream(imageUri)
+    val bitmap = BitmapFactory.decodeStream(inputStream)
+    if (bitmap == null) {
+        Log.e("ImageBlur", "Failed to decode bitmap from URI")
+        return null
+    }
+
+    val correctedBitmap = correctImageOrientation(context, imageUri, bitmap)
+    return scaleDownBitmap(correctedBitmap, maxDimension = 1024) // Scale down the bitmap
+}
 
 private fun scaleDownBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {
     val ratio = maxDimension.toFloat() / max(bitmap.width, bitmap.height).toFloat()
@@ -129,18 +157,14 @@ private fun scaleDownBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {
         true
     )
 }
-private fun applyBlur(context: Context, imageUri: Uri, blurLevel: Float, blurType: String): Bitmap? {
-    val inputStream = context.contentResolver.openInputStream(imageUri)
-    val bitmap = BitmapFactory.decodeStream(inputStream)
-    if (bitmap == null) {
-        Log.e("ImageBlur", "Failed to decode bitmap from URI")
-        return null
-    }
-
-    val correctedBitmap = correctImageOrientation(context, imageUri, bitmap)
-
+private fun applyBlur(
+    bitmap: Bitmap,
+    blurLevel: Float,
+    blurType: String
+): Bitmap {
     val srcMat = Mat()
-    Utils.bitmapToMat(correctedBitmap, srcMat)
+    Utils.bitmapToMat(bitmap, srcMat)
+
     val blurredMat = when (blurType) {
         "gaussian" -> applyGaussianBlur(srcMat, blurLevel)
         "motion" -> applyMotionBlur(srcMat, blurLevel.toInt())
@@ -150,16 +174,15 @@ private fun applyBlur(context: Context, imageUri: Uri, blurLevel: Float, blurTyp
         else -> srcMat // default or unknown type
     }
 
-    val blurredBitmap =
-        Bitmap.createBitmap(blurredMat.cols(), blurredMat.rows(), Bitmap.Config.ARGB_8888)
+    val blurredBitmap = Bitmap.createBitmap(blurredMat.cols(), blurredMat.rows(), Bitmap.Config.ARGB_8888)
     Utils.matToBitmap(blurredMat, blurredBitmap)
 
     srcMat.release()
     blurredMat.release()
 
-    Log.d("ImageBlur", "Blur applied with level: $blurLevel, type: $blurType")
     return blurredBitmap
 }
+
 
 private fun applyGaussianBlur(srcMat: Mat, blurLevel: Float): Mat {
     val dstMat = Mat()
@@ -200,19 +223,27 @@ private fun applyPixelate(srcMat: Mat, pixelSize: Int): Mat {
 }
 
 private fun applyZoomBlur(srcMat: Mat, blurStrength: Double): Mat {
-    val dstMat = Mat()
-    Imgproc.resize(
-        srcMat,
-        dstMat,
-        Size(),
-        1 - blurStrength,
-        1 - blurStrength,
-        Imgproc.INTER_LINEAR
-    )
-    Imgproc.resize(dstMat, dstMat, srcMat.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
-    Core.addWeighted(srcMat, 1.0 - blurStrength, dstMat, blurStrength, 0.0, dstMat)
-    return dstMat
+    val scaleFactor = 0.5 // Reduce this to increase performance
+    val downscaledSize = Size(srcMat.cols() * scaleFactor, srcMat.rows() * scaleFactor)
+
+    // Downscale
+    val downscaledMat = Mat()
+    Imgproc.resize(srcMat, downscaledMat, downscaledSize)
+
+    // Apply blur on downscaled image
+    val blurredMat = Mat()
+    Imgproc.GaussianBlur(downscaledMat, blurredMat, Size(), blurStrength)
+
+    // Upscale back to original size
+    val upscaledMat = Mat()
+    Imgproc.resize(blurredMat, upscaledMat, srcMat.size())
+
+    downscaledMat.release()
+    blurredMat.release()
+
+    return upscaledMat
 }
+
 
 private fun applyBoxBlur(srcMat: Mat, blurSize: Int): Mat {
     val dstMat = Mat()
