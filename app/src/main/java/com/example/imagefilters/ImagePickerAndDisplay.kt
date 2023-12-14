@@ -130,7 +130,7 @@ fun ImagePickerAndDisplay() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp),
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.FillWidth
             )
         }
     }
@@ -145,7 +145,7 @@ private fun processImageBeforeBlurring(context: Context, imageUri: Uri): Bitmap?
     }
 
     val correctedBitmap = correctImageOrientation(context, imageUri, bitmap)
-    return scaleDownBitmap(correctedBitmap, maxDimension = 1024) // Scale down the bitmap
+    return scaleDownBitmap(correctedBitmap, maxDimension = 512) // Scale down the bitmap
 }
 
 private fun scaleDownBitmap(bitmap: Bitmap, maxDimension: Int): Bitmap {
