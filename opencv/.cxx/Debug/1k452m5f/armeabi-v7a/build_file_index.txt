@@ -1,1 +1,0 @@
-/Users/edvard/work/image-filters/opencv/libcxx_helper/CMakeLists.txt
