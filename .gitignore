@@ -45,3 +45,4 @@ app.*.map.json
 
 /opencv/build/
 .gradle/
+/opencv/.cxx/
